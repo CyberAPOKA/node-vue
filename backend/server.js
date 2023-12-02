@@ -2,32 +2,31 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 
+// gera um token de numeros e letras com 16 caracteres.
 function generateToken() {
     return crypto.randomBytes(16).toString('hex');
 }
 
+// configuração inicial do servidor Express
 const app = express();
+app.use(cors());
+app.use(express.json());
 
-// Middleware
-app.use(cors()); // Habilita o CORS
-app.use(express.json()); // Permite que o servidor entenda JSON
-
-// Rota de Teste
+// verifica se o servidor está funcionando.
 app.get('/', (req, res) => {
     res.send('Servidor Express rodando!');
 });
 
-// Definindo a porta do servidor
+// inicialização do servidor na porta especificada
 const PORT = process.env.PORT || 3000;
 
-// Iniciando o servidor
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
 });
 
 const mysql = require('mysql');
 
-// Configuração da conexão com o banco de dados
+// configuração da conexão com o banco de dados MySQL
 const db = mysql.createConnection({
     host: 'localhost',
     user: 'root',
@@ -35,7 +34,7 @@ const db = mysql.createConnection({
     database: 'speedio'
 });
 
-// Conectando ao banco de dados
+// faz a conexão
 db.connect((err) => {
     if (err) {
         throw err;
@@ -43,9 +42,10 @@ db.connect((err) => {
     console.log('Conectado ao MySQL');
 });
 
+// salva uma anotação com o token no banco de dados.
 app.post('/persistnotes', async (req, res) => {
     const notes = req.body;
-    const token = generateToken(); // Gera um token único
+    const token = generateToken();
 
     try {
         for (const note of notes) {
@@ -55,11 +55,11 @@ app.post('/persistnotes', async (req, res) => {
         res.json({ message: 'Notas salvas com sucesso', token: token });
     } catch (err) {
         console.error(err);
-        res.status(500).send('Erro ao salvar notas no banco de dados');
+        res.status(500).send('Erro ao salvar anotações no banco de dados');
     }
 });
 
-
+// função para realizar queries SQL de forma assíncrona
 function queryAsync(sql, params) {
     return new Promise((resolve, reject) => {
         db.query(sql, params, (err, result) => {
@@ -69,30 +69,20 @@ function queryAsync(sql, params) {
     });
 }
 
-// Era usado inicialmente para recuperar todos as anotações do banco de dados mysql.
-// app.get('/getnotes', async (req, res) => {
-//     try {
-//         let sql = 'SELECT * FROM notes';
-//         const notes = await queryAsync(sql);
-//         res.json(notes);
-//     } catch (err) {
-//         console.error(err);
-//         res.status(500).send('Erro ao recuperar notas do banco de dados');
-//     }
-// });
-
+// deleta uma anotação do banco de dados.
 app.delete('/deletenote/:id', async (req, res) => {
     const { id } = req.params;
     try {
         let sql = 'DELETE FROM notes WHERE id = ?';
         await queryAsync(sql, [id]);
-        res.send('Nota excluída com sucesso');
+        res.send('Anotação excluída com sucesso');
     } catch (err) {
         console.error(err);
-        res.status(500).send('Erro ao excluir nota do banco de dados');
+        res.status(500).send('Erro ao excluir anotação do banco de dados');
     }
 });
 
+// recupera uma anotação específica através do token inserido, fazendo a verificação com o where na coluna token do banco de dados.
 app.get('/getnote/:token', async (req, res) => {
     const { token } = req.params;
     try {
@@ -101,11 +91,11 @@ app.get('/getnote/:token', async (req, res) => {
         if (notes.length > 0) {
             res.json(notes);
         } else {
-            res.status(404).send('Nenhuma nota encontrada para este token');
+            res.status(404).send('Nenhuma anotação encontrada para este token');
         }
     } catch (err) {
         console.error(err);
-        res.status(500).send('Erro ao recuperar notas do banco de dados');
+        res.status(500).send('Erro ao recuperar anotações do banco de dados');
     }
 });
 

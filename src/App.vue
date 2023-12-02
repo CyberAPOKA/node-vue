@@ -9,17 +9,23 @@ import Calendar from 'primevue/calendar';
 import Textarea from 'primevue/textarea';
 import Checkbox from 'primevue/checkbox';
 import InputText from 'primevue/inputtext';
+import { useToast } from 'vue-toast-notification';
+import 'vue-toast-notification/dist/theme-sugar.css';
 
+const toast = useToast();
+
+// configuração do indexDB para armazenamento local
 const db = new Dexie('MyNotesDB');
 db.version(1).stores({
   notes: '++id, description, potential, categorization, reminder'
 });
+// salva uma anotação no indexDB
 const saveNoteToIndexDB = async (note) => {
   await db.notes.add(note);
 };
 
+// controle a modal de criação (abrir e fechar)
 const showCreateNoteModal = ref(false);
-
 const openCreateNoteModal = () => {
   showCreateNoteModal.value = true;
 };
@@ -27,6 +33,7 @@ const closeCreateNoteModal = () => {
   showCreateNoteModal.value = false;
 };
 
+// define e inicia o form com os valores iniiciais
 const form = ref({
   description: '',
   potential: 0,
@@ -34,6 +41,7 @@ const form = ref({
   reminder: '',
 });
 
+// inicia as variáveis de erros
 const formErrors = ref({
   descriptionError: '',
   potentialError: '',
@@ -41,9 +49,21 @@ const formErrors = ref({
   reminderError: ''
 });
 
-const validateDescription = () => {
-  const descriptionTrimmed = form.value.description.trim();
+// reseta o formulário
+const resetForm = () => {
+  form.value = {
+    description: '',
+    potential: 0,
+    categorization: null,
+    reminder: '',
+  };
+};
 
+// validação do campo descrição 
+const validateDescription = () => {
+  //remove os espaços em brancos
+  const descriptionTrimmed = form.value.description.trim();
+  // regras para não ser nulo e nem ter mais de 255 caracteres.
   if (!descriptionTrimmed) {
     formErrors.value.descriptionError = 'A descrição é obrigatória.';
   } else if (descriptionTrimmed.length > 255) {
@@ -53,6 +73,7 @@ const validateDescription = () => {
   }
 };
 
+// validação do campo potencial do negócio
 const validatePotential = () => {
   if (form.value.potential <= 0) {
     formErrors.value.potentialError = 'O potencial deve ser maior que zero.';
@@ -61,6 +82,7 @@ const validatePotential = () => {
   }
 };
 
+// validação do campo categorização
 const validateCategorization = () => {
   if (!form.value.categorization) {
     formErrors.value.categorizationError = 'A categorização é obrigatória.';
@@ -69,6 +91,7 @@ const validateCategorization = () => {
   }
 };
 
+// validação do campo lembrete
 const validateReminder = () => {
   if (!form.value.reminder) {
     formErrors.value.reminderError = 'A data do lembrete é obrigatória.';
@@ -77,12 +100,15 @@ const validateReminder = () => {
   }
 };
 
+// função que salva os dados
 const submitForm = async () => {
+  //chama todas as funções de validação abaixo
   validateDescription();
   validatePotential();
   validateCategorization();
   validateReminder();
 
+  //se não tiver erros em nenhum campo ele continua o bloco if
   if (!formErrors.value.descriptionError && !formErrors.value.potentialError && !formErrors.value.categorizationError && !formErrors.value.reminderError) {
     const newNote = {
       description: form.value.description,
@@ -92,16 +118,30 @@ const submitForm = async () => {
     };
     try {
       await saveNoteToIndexDB(newNote);
+      // se o checkbox de persistir os dados for marcado, vai salvar no banco de dados também.
       if (form.value.persist == 'yes') {
         await persistData();
-        alert('Anotações persistidas no servidor com sucesso!');
+        //exibe uma notificação no canto superior direto de sucesso.
+        toast.success("Anotação salva no banco de dados!", {
+          position: "top-right",
+          duration: 5000,
+        });
+
       } else {
-        alert('Anotação salva localmente!');
+        toast.success("Anotação salva localmente!", {
+          position: "top-right",
+          duration: 5000,
+        });
       }
+      // reseta o form, fecha a modal e carrega as novas anotações respectivamentes.
+      resetForm();
+      closeCreateNoteModal();
       loadNotes();
     } catch (error) {
-      console.error('Erro ao salvar anotação:', error);
-      alert('Erro ao salvar anotação');
+      toast.error("Erro ao salvar anotação.", {
+        position: "top-right",
+        duration: 5000,
+      });
     }
   }
 };
@@ -115,42 +155,49 @@ const closeClearAllNotesModal = () => {
   showClearAllNotesModal.value = false;
 };
 
+//recupera as anotações do indexDB
 const fetchNotesFromIndexDB = async () => {
   try {
     return await db.notes.toArray();
   } catch (error) {
-    console.error('Erro ao buscar notas:', error);
+    console.error('Erro:', error);
     return [];
   }
 };
+
 const notes = ref([]);
 
 const loadNotes = async () => {
   const localNotes = await fetchNotesFromIndexDB();
   try {
-    // const response = await axios.get('http://127.0.0.1:3000/getnotes');
-    // const serverNotes = response.data;
     notes.value = [...localNotes];
   } catch (error) {
-    console.error('Erro ao carregar notas do servidor:', error);
+    console.error('Erro:', error);
   }
 };
 
+//inicia a página com o carregamento das anotações
 onMounted(loadNotes);
 
+// apaga todas as anotações
 const clearAllNotes = async () => {
   try {
     await db.notes.clear();
     loadNotes();
-    alert('Todas as notas foram limpas!');
+    toast.success("Anotações removidas com Sucesso!", {
+      position: "top-right",
+      duration: 5000,
+    });
     closeClearAllNotesModal();
   } catch (error) {
-    console.error('Erro ao limpar notas:', error);
-    alert('Erro ao limpar notas');
+    toast.error("Erro ao excluir anotações!", {
+      position: "top-right",
+      duration: 5000,
+    });
   }
 };
 
-const token = ref(''); // Adicione esta linha no topo do script
+const token = ref('');
 const showTokenModal = ref(false);
 
 const openTokenModal = () => {
@@ -160,17 +207,19 @@ const closeTokenModal = () => {
   showTokenModal.value = false;
 };
 
+// faz salvar no banco de dados com o token
 const persistData = async () => {
   try {
     const lastNote = await db.notes.orderBy('id').last();
     const response = await axios.post('http://127.0.0.1:3000/persistnotes', [lastNote]);
-    token.value = response.data.token; // Armazena o token retornado
-    openTokenModal(); // Abre a modal com o token
+    token.value = response.data.token;
+    openTokenModal();
   } catch (error) {
     throw new Error('Erro ao persistir anotação no servidor: ' + error.message);
   }
 };
 
+// categorias para usar no select
 const categorizations = ref({
   Urgente: 'Muito alta',
   Importante: 'Alta',
@@ -179,6 +228,7 @@ const categorizations = ref({
   Rotina: 'Muito baixa'
 });
 
+//inicia o id da anotação como null e depois é recuperado através do click da modal para saber qual anotação será excluída
 const noteId = ref(null);
 const showDeleteNoteModal = ref(false);
 
@@ -191,14 +241,17 @@ const closeDeleteNoteModal = () => {
   noteId.value = null;
 };
 
+// deleta uma anotação em específica do indexDB.
 const deleteNoteFromIndexDB = async (id) => {
   await db.notes.delete(id);
 };
 
-const deleteNoteFromServer = async (id) => {
-  await axios.delete(`http://127.0.0.1:3000/deletenote/${id}`);
-};
+// deleta uma anotação em específica do banco de dados.
+// const deleteNoteFromServer = async (id) => {
+//   await axios.delete(`http://127.0.0.1:3000/deletenote/${id}`);
+// };
 
+//chama as funções de deletar a anotação
 const deleteNote = async () => {
   try {
 
@@ -209,29 +262,39 @@ const deleteNote = async () => {
 
     loadNotes();
     closeDeleteNoteModal();
-    alert('Nota excluída com sucesso!');
+    toast.success("Anotação excluída com sucesso!", {
+      position: "top-right",
+      duration: 5000,
+    });
   } catch (error) {
-    console.error('Erro ao excluir nota:', error);
-    alert('Erro ao excluir nota');
+    toast.error("Erro ao excluir anotação", {
+      position: "top-right",
+      duration: 5000,
+    });
   }
 };
 
+// copia o token
 const copyToken = () => {
   if (navigator.clipboard) {
     navigator.clipboard.writeText(token.value)
       .then(() => {
-        // Ação de sucesso, ex.: mostrar uma mensagem para o usuário
-        alert('Token copiado para a área de transferência!');
+        toast.success("Token copiado para a área de transferência!", {
+          position: "top-right",
+          duration: 5000,
+        });
       })
       .catch(err => {
-        // Tratar erro, ex.: mostrar uma mensagem de erro
-        console.error('Erro ao copiar o token:', err);
-        alert('Falha ao copiar o token. Tente novamente.');
+        toast.success("Erro ao copiar o token. Tente novamente.", {
+          position: "top-right",
+          duration: 5000,
+        });
       });
   } else {
-    // Tratar caso o navegador não suporte a API de área de transferência
-    console.error('A área de transferência não é suportada neste navegador.');
-    alert('A área de transferência não é suportada neste navegador.');
+    toast.success("A área de transferência não é suportada neste navegador.", {
+      position: "top-right",
+      duration: 5000,
+    });
   }
 };
 
@@ -242,6 +305,7 @@ const openRecoverNoteModal = () => {
 };
 const closeRecoverNoteModal = () => {
   showRecoverNoteModal.value = false;
+  recoveryToken.value = '';
 };
 
 const showRecoveredNoteModal = ref(false);
@@ -255,6 +319,7 @@ const closeRecoveredNoteModal = () => {
 
 const recoveredNote = ref(null);
 
+// recupera a anotação
 const recoverNote = async (token) => {
   try {
     const response = await axios.get(`http://127.0.0.1:3000/getnote/${token}`);
@@ -262,29 +327,36 @@ const recoverNote = async (token) => {
 
     if (notesArray && notesArray.length > 0) {
       const note = notesArray[0];
-      note.reminder = formatDateTime(note.reminder); // Formatar a data
+      note.reminder = formatDateTime(note.reminder);
       recoveredNote.value = note;
       openRecoveredNoteModal(recoveredNote);
     }
     else {
-      alert('Nenhuma nota encontrada para este token');
-      recoveredNote.value = null; // Resetar a variável se nenhuma nota for encontrada
+      toast.error("Token inválido, tente novamente.", {
+        position: "top-right",
+        duration: 5000,
+      });
+      recoveredNote.value = null;
     }
   } catch (error) {
     if (error.response && error.response.status === 404) {
-      alert('Nenhuma nota encontrada para este token');
+      toast.error("Token inválido, tente novamente.", {
+        position: "top-right",
+        duration: 5000,
+      });
     } else {
-      console.error('Erro ao recuperar nota:', error);
-      alert('Erro ao recuperar nota');
+      toast.error("Erro interno.", {
+        position: "top-right",
+        duration: 5000,
+      });
     }
-    recoveredNote.value = null; // Resetar a variável em caso de erro
+    recoveredNote.value = null;
   }
 };
 
-
-
 const recoveryToken = ref('');
 
+//faz a formatação da data
 const formatDateTime = (dateTimeString) => {
   const date = new Date(dateTimeString);
   return date.toLocaleString('pt-BR', {
@@ -320,7 +392,7 @@ const formatDateTime = (dateTimeString) => {
           <button
             class="bg-[var(--primary-color)] w-full p-4 rounded-lg text-[var(--primary-color-text)] text-xl font-semibold"
             @click="openRecoverNoteModal">
-            Recuperar nota
+            Recuperar anotação
           </button>
         </li>
         <li v-for="note in notes" :key="note.id" class="my-4">
@@ -348,7 +420,7 @@ const formatDateTime = (dateTimeString) => {
       <Modal :show="showRecoverNoteModal" @close="closeRecoverNoteModal" :maxWidth="'2xl'">
         <div class="bg-[var(--surface-100)]">
           <div class="flex justify-between p-6">
-            <h1 class="text-[var(--surface-700)] font-semibold text-3xl">Recuperação de nota</h1>
+            <h1 class="text-[var(--surface-700)] font-semibold text-3xl">Recuperação de anotação</h1>
             <button type="button" @click="closeRecoverNoteModal"
               class="hover:text-[var(--red-500)] hover:scale-150 ease-out duration-300">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
